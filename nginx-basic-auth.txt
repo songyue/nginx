@@ -1,0 +1,32 @@
+nginx用户认证模块 (Basic HTTP authentication）
+
+模块名 ngx_http_auth_basic_module
+
+使用方式
+
+首先创建密码文件
+htpasswd -bc /etc/nginx/conf.d/htpasswd testuser1 123456
+查看创建内容
+cat /etc/nginx/conf.d/htpasswd 
+testuser:$apr1$Kpvt6Ynt$DqAcEL.yAz5PKoE78AItp0
+
+修改站点配置
+vim /etc/nginx/site-enabled/default
+
+.....
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+.....    
+	location / {
+        #增加下面两行
+        auth_basic "nginx basic http test for songyue-OptiPlex-3020";
+        auth_basic_user_file conf.d/htpasswd;
+        autoindex on;
+
+		# First attempt to serve request as file, then
+		# as directory, then fall back to displaying a 404.
+		try_files $uri $uri/ =404;
+	}
+
+....
