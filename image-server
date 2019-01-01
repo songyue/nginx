@@ -1,0 +1,65 @@
+server {
+	server_name images.domain.com;
+	root /resources/;
+
+	#访问 
+	#http://xxx.com/image_filter/222.jpg@120w_120h_75Q_r
+	#代理到
+	#xxx.com/image-resize/image_filter/222.jpg?w=200&h=200&q=75
+
+	location ~ (.+)\.(jpg|jpeg|gif|png)@(\d+)w_(\d+)h_(\d+)Q_([rc])$ {
+	
+		# 方便调试
+		error_log  /var/log/nginx/images.domain.com.imagefilter.error.log  debug;
+		# 限制referer，防盗链
+		# valid_referers xxx.com;#domain modify
+		# if ($invalid_referer) {return 404;}
+	
+		set $w $3; #宽
+		set $h $4; #高
+		set $q $5; #图片质量
+		set $type $6;
+		set $image_path  $1.$2; #真实图片地址
+		set $cache_path  $1_$3w_$4h_$5Q_$6.$2;  #临时文件地址
+		if ($type = 'r') {
+			set $type 'image-resize';
+		}
+		if ($type = 'c') {
+			set $type 'image-crop';
+		}
+		set $image_uri  /$type$image_path?w=$w&h=$h&q=$q;
+		if (-f $document_root$cache_path) {
+			rewrite (.+)\.(jpg|jpeg|gif|png)@(\d+)w_(\d+)h_(\d+)Q_([rc])$ $1_$3w_$4h_$5Q_$6.$2;
+			break;
+		}
+		if (!-f $document_root$cache_path) {
+	# proxy_pass http://$server_name.$image_uri;
+	# 必须填写ip,填写域名的话，nginx在启动的时候会检测域名，解析DNS,启动后，在修改域名的解析是不生效的
+	# 实际上，本机填写域名报500不生效，估计是DNS设置不对，会在server下添加
+	# resolver 127.0.0.1 valid=300s;
+	
+			proxy_pass http://127.0.0.1$image_uri;
+			break;
+		}
+		proxy_store $document_root$cache_path;
+		proxy_store_access user:rw group:rw all:r;
+		proxy_temp_path  /tmp/images;
+		proxy_set_header Host $host;
+		expires  10d; # 设置图片过期时间10天
+	}
+	location ~ /image-resize(.+)\.(jpg|jpeg|gif|png) {
+		rewrite /image-resize(.+)\.(jpg|jpeg|gif|png)$ $1.$2 break;
+		image_filter resize $arg_w $arg_h;
+		image_filter_jpeg_quality $arg_q;
+		image_filter_buffer 5M;
+		try_files $1.$2 /img/notfound.jpg;
+	}
+	location ~ /image-crop(.+)\.(jpg|jpeg|gif|png) {
+		rewrite /image-crop(.+)\.(jpg|jpeg|gif|png)$ $1.$2 break;
+		image_filter crop $arg_w $arg_h;
+		image_filter_jpeg_quality $arg_q;
+		image_filter_buffer 5M;
+		try_files $1.$2 /img/notfound.jpg;
+	}
+	
+}
